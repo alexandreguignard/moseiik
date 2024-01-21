@@ -9,7 +9,8 @@ mod tests {
 
     fn open_image(image_path: &str) -> Result<RgbImage, Box<dyn Error>>
     {
-        let mut path = image_path.to_owned();
+        // Car image_path n'est pas mutable or il le faut pour la fonction ImageReader::open
+        let path = image_path;
         Ok(ImageReader::open(&path)?.decode()?.into_rgb8())
     }
 
