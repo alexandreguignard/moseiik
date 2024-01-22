@@ -349,23 +349,181 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    // Permet d'importer tous les symboles utilisés au début du fichier
+    use super::*;
+
+
+    //Création d'une fonction permettant d'ouvrir une image
+    fn open_image(image_path: &str) -> Result<RgbImage, Box<dyn Error>> {
+        // On doit recréer une variable car image_path n'est pas mutable
+        let path = image_path;
+        // Ouverture de l'image
+        let image = ImageReader::open(&path)?.decode()?.into_rgb8();
+        Ok(image)
+    }
+    //TEST 1 
+    //Test de la norme l1 sur x86 avec la même image, on s'attend à obtenir 0
     #[test]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    fn unit_test_x86() {
-        // TODO
-        assert!(false);
+    fn test_l1_x86_sse2_0() {
+        // On load notre image
+        let image_path = "assets/tiles-small/tile-1.png";
+        let result = open_image(image_path);
+        match result {
+            Ok(target) => {
+                unsafe {
+                    assert_eq!(l1_x86_sse2(&target, &target), 0);
+                }
+            }
+            Err(_err) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
     }
+    //TEST 2 
+    //Test de la norme l1 sur x86 avec deux images différentes
+    //Nous avons utilisé un script python permettant le calcul de la norme entre 2 images pour  connaître la valeur attendu
+    #[test]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    fn test_l1_x86_sse2_1() {
+        // On load nos deux images
+        let image_path1 = "assets/tiles-small/tile-1.png";
+        let image_path2 = "assets/tiles-small/tile-2.png";
+        let result = open_image(image_path1);
+        let result2 = open_image(image_path2);
 
+        // On vérifie que les images ont bien été load
+        match (result, result2) {
+            (Ok(im1), Ok(im2)) => {
+                unsafe {
+                    assert_eq!(l1_x86_sse2(&im1, &im2), 2154);//On s'attend à 2154 d'après le scipt python
+                }
+            }
+            (Err(_err), _) | (_, Err(_err)) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
+    }
+    //TEST 3 
+    //Test de la norme l1 sur Arm avec la même image, on s'attend à obtenir 0
     #[test]
     #[cfg(target_arch = "aarch64")]
-    fn unit_test_aarch64() {
-        // TODO
-        assert!(false);
+    fn test_l1_neon_0() {
+        let image_path = "assets/tiles-small/tile-1.png";
+        let result = open_image(image_path);
+        match result {
+            Ok(target) => {
+                unsafe {
+                    assert_eq!(l1_neon(&target, &target), 0);
+                }
+            }
+            Err(_err) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
     }
-
+    //TEST 4 
+    //Test de la norme l1 sur Arm avec deux images différentes
+    //Nous avons utilisé un script python permettant le calcul de la norme entre 2 images pour  connaître la valeur attendu
     #[test]
-    fn unit_test_generic() {
-        // TODO
-        assert!(false);
+    #[cfg(target_arch = "aarch64")]
+    fn test_l1_neon_1() {
+        let image_path1 = "assets/tiles-small/tile-1.png";
+        let image_path2 = "assets/tiles-small/tile-2.png";
+        let result = open_image(image_path1);
+        let result2 = open_image(image_path2);
+        match (result, result2) {
+            (Ok(im1), Ok(im2)) => {
+                unsafe {
+                    assert_eq!(l1_neon(&im1, &im2), 2154);//On s'attend à 2154 d'après le scipt python
+                }
+            }
+            (Err(_err), _) | (_, Err(_err)) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
+    }
+    //TEST 5 
+    //Test de la norme l1 sur n'importe quelle plateforme avec la même image, on s'attend à obtenir 0
+    #[test]
+    fn test_l1_generic_0() {
+        let image_path = "assets/tiles-small/tile-3.png";
+        let result = open_image(image_path);
+        match result {
+            Ok(target) => {
+                assert_eq!(l1_generic(&target, &target), 0);  
+            }
+            Err(_err) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
+    }
+    //TEST 6 
+    //Test de la norme l1 sur n'importe quelle plateforme avec deux images différentes
+    //Nous avons utilisé un script python permettant le calcul de la norme entre 2 images pour  connaître la valeur attendu
+    #[test]
+    fn test_l1_generic_1() {
+        let image_path1 = "assets/tiles-small/tile-2.png";
+        let image_path2 = "assets/tiles-small/tile-4.png";
+        let result = open_image(image_path1);
+        let result2 = open_image(image_path2);
+        match (result, result2) {
+            (Ok(im1), Ok(im2)) => {
+                assert_eq!(l1_generic(&im1, &im2), 2253);//On s'attend à 2253 d'après le scipt python
+            }
+            (Err(_err), _) | (_, Err(_err)) => {
+                // Une erreur s'est produite
+                assert!(false);
+            }
+        }
+    }
+    //TEST 7 
+    //Test de la fonction prepare_target sur n'importe quelle plateforme
+    //Scaling fixé à 5 et tile de base fixé à 5 aussi donc on s'attend à une image de 25 en sortie
+    #[test]
+    fn test_prepare_target() {
+        let image_path1 = "assets/tiles-small/tile-1.png";
+        let tile_size = Size {
+            width: 5,
+            height: 5,
+        };
+
+        let target = match prepare_target(image_path1, 5, &tile_size) {
+            Ok(t) => {
+                assert_eq!(t.width(), 25); // scaling de 5 donc on s'attend à avoir 5x la taille d'origine (5*5=25)
+                assert_eq!(t.height(), 25);
+            }
+            Err(_e) => assert!(false),
+        };
+    }
+    //TEST 8 
+    //Test de la fonction prepare_tile sur n'importe quelle plateforme
+    //Tile de base en 5x5, taille demandé 30x20 on test donc que la taille en sortie est bien celle demandé
+    #[test]
+    fn test_prepare_tiles() {
+        let folder_path = "assets/tiles-small";
+        let tile_size = Size {	//Taille demandée
+            width: 30,
+            height: 20,
+        };
+
+        match prepare_tiles(folder_path, &tile_size, false) {
+            Ok(vecteur) => {
+                for tile in vecteur {
+                    assert_eq!(tile.width(), 30); //Test taille en sortie sur chaque tiles
+                    assert_eq!(tile.height(), 20);
+                }
+            }
+            Err(_e) => {
+                 // Une erreur s'est produite
+                assert!(false);
+            }
+        }
     }
 }
+
